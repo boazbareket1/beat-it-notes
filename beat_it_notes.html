@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Beat It Notes — ביט איט</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #080808; }
+    @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;600;700;900&display=swap');
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;600;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useCallback } = React;
+
+import { useState, useEffect, useCallback } from "react";
+
+// ═══════════════════════════════════════════════
+// COLORS — exact match to physical cards
+// ═══════════════════════════════════════════════
+const CREAM  = "#EDE0CC";
+const DARK   = "#3A3028";
+const GREEN  = "#B8C96A";
+const BLUE   = "#9BAED0";
+const BORDER = "#C4AD8A";
+
+// ═══════════════════════════════════════════════
+// AUDIO ENGINE  (no class fields, no ?.)
+// ═══════════════════════════════════════════════
+function makeBeatAudio() {
+  var ctx = null, noise = null, bpm = 100, vol = 0.8;
+
+  function init() {
+    if (ctx) return;
+    try { ctx = new (window.AudioContext || window.webkitAudioContext)(); mkNoise(); } catch(e) {}
+  }
+  function resume() { if (ctx && ctx.state === "suspended") ctx.resume(); }
+  function mkNoise() {
+    var b = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    var d = b.getChannelData(0);
+    for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    noise = b;
+  }
+  function kick(t) {
+    if (!ctx) return;
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(0.01, t + 0.4);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+    o.start(t); o.stop(t + 0.4);
+  }
+  function snare(t) {
+    if (!ctx || !noise) return;
+    var src = ctx.createBufferSource(); src.buffer = noise;
+    var f = ctx.createBiquadFilter(); f.type = "highpass"; f.frequency.value = 1000;
+    var env = ctx.createGain(), g = ctx.createGain(); g.gain.value = vol;
+    src.connect(f); f.connect(env); env.connect(g); g.connect(ctx.destination);
+    env.gain.setValueAtTime(0.8, t); env.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+    src.start(t); src.stop(t + 0.1);
+  }
+  function click(t, strong) {
+    if (!ctx) return;
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = strong ? 1200 : 900;
+    g.gain.setValueAtTime(0.12, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.05);
+    o.start(t); o.stop(t + 0.05);
+  }
+  function playBeat(type, t) {
+    if (!ctx || type === "rest") return;
+    var half = 60 / bpm / 2;
+    var fn = type.indexOf("down") !== -1 ? kick : snare;
+    fn(t); if (type.indexOf("eighths") !== -1) fn(t + half);
+  }
+  function playOnce(type) {
+    init(); resume();
+    if (ctx && type !== "rest") playBeat(type, ctx.currentTime + 0.05);
+  }
+  function playPattern(pattern, onBeat, onDone) {
+    init(); resume(); if (!ctx) return;
+    var B = 60 / bpm, now = ctx.currentTime + 0.1;
+    for (var i = 0; i < 4; i++) click(now + i * B, i === 0);
+    var ps = now + 4 * B;
+    for (var j = 0; j < pattern.length; j++) {
+      click(ps + j * B, j === 0); playBeat(pattern[j], ps + j * B);
+    }
+    for (var a = 0; a < 4; a++) (function(idx){ setTimeout(function(){ if(onBeat) onBeat(idx,"count"); }, idx*B*1000+80); })(a);
+    for (var b2 = 0; b2 < 4; b2++) (function(idx){ setTimeout(function(){ if(onBeat) onBeat(idx,"pat"); }, (4+idx)*B*1000+80); })(b2);
+    setTimeout(function(){ if(onDone) onDone(); }, 8*B*1000+300);
+  }
+
+  return {
+    setBpm: function(v){ bpm=v; },
+    setVol: function(v){ vol=v; },
+    playOnce: playOnce,
+    playPattern: playPattern,
+  };
+}
+var audio = makeBeatAudio();
+
+// ═══════════════════════════════════════════════
+// SVG NOTE COMPONENTS
+// head DOWN = בום (שולחן) | head UP = טאק (כף)
+// ═══════════════════════════════════════════════
+
+// Quarter DOWN: ראש תו למטה, גבעול למעלה (בום)
+function NoteQuarterDown(props) {
+  var size = props.size || 50;
+  var color = props.color || DARK;
+  return (
+    <svg viewBox="0 0 80 130" style={{width: size * 0.65, height: size}} fill={color}>
+      {/* stem — right side, going up */}
+      <rect x="54" y="8" width="7" height="88" rx="3"/>
+      {/* note head — tilted, at bottom left */}
+      <ellipse cx="37" cy="100" rx="23" ry="16" transform="rotate(-18 37 100)"/>
+    </svg>
+  );
+}
+
+// Quarter UP: ראש תו למעלה, גבעול למטה (טאק)
+function NoteQuarterUp(props) {
+  var size = props.size || 50;
+  var color = props.color || DARK;
+  return (
+    <svg viewBox="0 0 80 130" style={{width: size * 0.65, height: size}} fill={color}>
+      {/* note head — tilted, at TOP */}
+      <ellipse cx="43" cy="28" rx="23" ry="16" transform="rotate(-18 43 28)"/>
+      {/* stem — left side of head, going DOWN */}
+      <rect x="20" y="28" width="7" height="90" rx="3"/>
+    </svg>
+  );
+}
+
+// Eighths DOWN: ראשי תווים למטה, קורה למעלה (בום-בום)
+function NoteEighthsDown(props) {
+  var size = props.size || 50;
+  var color = props.color || DARK;
+  return (
+    <svg viewBox="0 0 130 130" style={{width: size, height: size}} fill={color}>
+      {/* beam at top */}
+      <rect x="12" y="8" width="106" height="13" rx="4"/>
+      {/* left stem */}
+      <rect x="12" y="8" width="7" height="90" rx="3"/>
+      {/* right stem */}
+      <rect x="111" y="8" width="7" height="90" rx="3"/>
+      {/* left head — bottom */}
+      <ellipse cx="4" cy="103" rx="19" ry="14" transform="rotate(-20 4 103)"/>
+      {/* right head — bottom */}
+      <ellipse cx="103" cy="103" rx="19" ry="14" transform="rotate(-20 103 103)"/>
+    </svg>
+  );
+}
+
+// Eighths UP: ראשי תווים למעלה, קורה למטה (טאק-טאק)
+function NoteEighthsUp(props) {
+  var size = props.size || 50;
+  var color = props.color || DARK;
+  return (
+    <svg viewBox="0 0 130 130" style={{width: size, height: size}} fill={color}>
+      {/* left head — TOP */}
+      <ellipse cx="27" cy="24" rx="19" ry="14" transform="rotate(-20 27 24)"/>
+      {/* right head — TOP */}
+      <ellipse cx="126" cy="24" rx="19" ry="14" transform="rotate(-20 126 24)"/>
+      {/* left stem — going DOWN from head */}
+      <rect x="38" y="24" width="7" height="90" rx="3"/>
+      {/* right stem — going DOWN from head */}
+      <rect x="111" y="24" width="7" height="90" rx="3"/>
+      {/* beam at BOTTOM */}
+      <rect x="38" y="103" width="80" height="13" rx="4"/>
+    </svg>
+  );
+}
+
+// Quarter Rest: שתק רבע — faithful to physical card (bold angular quarter rest)
+function NoteRest(props) {
+  var size = props.size || 50;
+  var color = props.color || DARK;
+  return (
+    <svg viewBox="0 0 80 160" style={{width: size * 0.55, height: size}} fill={color}>
+      <polygon points="28,8 72,8 72,24 28,42"/>
+      <path d="M72,16 C82,30 65,48 50,58 C38,66 36,76 44,86 C50,94 48,108 36,118 C30,124 20,130 16,134 C22,122 30,110 28,98 C26,84 38,74 46,68 C60,58 68,44 60,30 Z"/>
+      <ellipse cx="23" cy="136" rx="14" ry="10" transform="rotate(14 23 136)"/>
+    </svg>
+  );
+}
+
+function renderNote(type, size, color) {
+  if (type === "rest")         return <NoteRest size={size} color={color}/>;
+  if (type === "quarter_down") return <NoteQuarterDown size={size} color={color}/>;
+  if (type === "quarter_up")   return <NoteQuarterUp size={size} color={color}/>;
+  if (type === "eighths_down") return <NoteEighthsDown size={size} color={color}/>;
+  if (type === "eighths_up")   return <NoteEighthsUp size={size} color={color}/>;
+  return <NoteQuarterDown size={size} color={color}/>;
+}
+
+var NOTE_META = {
+  quarter_down: { label:"רבע",         sub:"QUARTER",     sound:"בּוּם",      dir:"↓ שולחן" },
+  quarter_up:   { label:"רבע",         sub:"QUARTER",     sound:"טַאק",      dir:"↑ כף" },
+  eighths_down: { label:"שתי שמיניות", sub:"TWO EIGHTHS", sound:"בּוּם בּוּם",  dir:"↓ שולחן" },
+  eighths_up:   { label:"שתי שמיניות", sub:"TWO EIGHTHS", sound:"טַאק טַאק",  dir:"↑ כף" },
+  rest:         { label:"שתק",          sub:"SILENCE",     sound:"כלום",      dir:"🤫" },
+};
+
+var FLIP = {
+  quarter_down:"quarter_up", quarter_up:"quarter_down",
+  eighths_down:"eighths_up", eighths_up:"eighths_down",
+  rest:"rest",
+};
+
+// Level colors
+var LEVEL_COLORS = ["#B8C96A", "#7BBFB0", "#9BAED0", "#B09ACE"];
+
+// Level descriptions
+var LEVEL_INFO = [
+  { name:"רמה 1", sub:"רבע בס בלבד" },
+  { name:"רמה 2", sub:"+ שמיניות" },
+  { name:"רמה 3", sub:"+ סנר" },
+  { name:"רמה 4", sub:"הכל" },
+];
+
+// Bank buttons per level
+var LEVEL_BANKS = [
+  ["quarter_down"],                                                   // 1
+  ["quarter_down", "eighths_down"],                                   // 2
+  ["quarter_down", "quarter_up", "rest"],                             // 3
+  ["quarter_down", "quarter_up", "eighths_down", "eighths_up", "rest"], // 4
+];
+
+function genPattern(lvl) {
+  var pool;
+  if      (lvl === 1) pool = ["quarter_down"];
+  else if (lvl === 2) pool = ["quarter_down", "eighths_down"];
+  else if (lvl === 3) pool = ["quarter_down", "quarter_up", "rest"];
+  else                pool = ["quarter_down","quarter_up","eighths_down","eighths_up","rest"];
+  var out = [];
+  for (var i = 0; i < 4; i++) out.push(pool[Math.floor(Math.random() * pool.length)]);
+  return out;
+}
+
+// ═══════════════════════════════════════════════
+// CARD COMPONENTS
+// ═══════════════════════════════════════════════
+function PhysCard(props) {
+  var type = props.type, active = props.active, compact = props.compact;
+  var h = compact ? 88 : 114;
+  var noteSize = compact ? 38 : 48;
+  var isUp   = type.indexOf("up")   !== -1;
+  var isDown = type.indexOf("down") !== -1;
+  var stripColor = isUp ? "#7BBFB0" : isDown ? "#C4AD8A" : "transparent";
+  var dirLabel   = isUp ? "↑  טאק  •  כף" : isDown ? "↓  בום  •  שולחן" : "";
+  var pr = useState(false);
+  var press = pr[0], setPress = pr[1];
+
+  return (
+    <div
+      onMouseDown={function(){ setPress(true); }}
+      onMouseUp={function(){ setPress(false); }}
+      onTouchStart={function(){ setPress(true); }}
+      onTouchEnd={function(){ setPress(false); }}
+      style={{
+        height: h, background: CREAM,
+        border: "2px solid " + (active ? "#F59E0B" : stripColor !== "transparent" ? stripColor : BORDER),
+        borderRadius: 10, overflow: "hidden",
+        display:"flex", flexDirection:"column", alignItems:"center",
+        cursor: "default", color: DARK, position:"relative", userSelect:"none",
+        boxShadow: active ? "0 0 20px rgba(245,158,11,0.55)" : press ? "none" : "0 3px 0 rgba(0,0,0,0.2)",
+        transform: active ? "translateY(-3px)" : press ? "translateY(3px)" : "none",
+        transition:"all 0.12s ease",
+      }}
+    >
+      {/* Direction strip at top */}
+      {dirLabel !== "" && (
+        <div style={{
+          width:"100%", padding:"3px 0", textAlign:"center",
+          background: stripColor, fontSize:8, fontWeight:700,
+          color: isUp ? "#1a4a44" : "#5a3a10", letterSpacing:0.5,
+          flexShrink: 0,
+        }}>
+          {dirLabel}
+        </div>
+      )}
+      {/* Note graphic */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",flex:1}}>
+        {renderNote(type, noteSize, DARK)}
+      </div>
+    </div>
+  );
+}
+
+function BarCard(props) {
+  var type = props.type, active = props.active, lvl = props.lvl || 1;
+  var bg = lvl === 1 ? GREEN : BLUE;
+  var isUp = type.indexOf("up") !== -1;
+  var dirLabel = type === "rest" ? "" : (isUp ? "↑ טאק" : "↓ בום");
+  return (
+    <div style={{
+      height:84, background:bg,
+      border:"2px solid " + (active ? "#F59E0B" : "rgba(0,0,0,0.12)"),
+      borderRadius:10,
+      display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+      position:"relative", gap:2,
+      boxShadow: active ? "0 0 18px rgba(245,158,11,0.5)" : "0 2px 4px rgba(0,0,0,0.12)",
+      transform: active ? "translateY(-3px) scale(1.04)" : "none",
+      transition:"all 0.12s ease",
+    }}>
+      {renderNote(type, 40, "rgba(0,0,0,0.85)")}
+      {dirLabel !== "" && (
+        <div style={{fontSize:9,fontWeight:700,color:"rgba(0,0,0,0.55)",letterSpacing:0.5}}>
+          {dirLabel}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HiddenSlot(props) {
+  var active = props.active, lvl = props.lvl || 1;
+  var bg = lvl === 1 ? GREEN : BLUE;
+  return (
+    <div style={{
+      height:84, borderRadius:10,
+      background: active ? bg : "#1a1a1a",
+      border:"2px solid " + (active ? "#F59E0B" : "#222"),
+      boxShadow: active ? "0 0 18px rgba(245,158,11,0.35)" : "none",
+      transition:"all 0.1s",
+    }}/>
+  );
+}
+
+function EmptySlot(props) {
+  return (
+    <div style={{height:110,borderRadius:10,border:"2px dashed #222",background:"#111",
+      display:"flex",alignItems:"center",justifyContent:"center",
+      color:"#2a2a2a",fontSize:22,fontWeight:700}}>
+      {props.n}
+    </div>
+  );
+}
+
+function BankBtn(props) {
+  var type = props.type, onAdd = props.onAdd, small = props.small;
+  var meta = NOTE_META[type];
+  var pr = useState(false); var press = pr[0], setPress = pr[1];
+  var h = small ? 72 : 88;
+  var noteSize = small ? 28 : 36;
+  var labelSize = small ? 10 : 12;
+  return (
+    <button
+      onClick={function(){ onAdd(type); }}
+      onMouseDown={function(){ setPress(true); }} onMouseUp={function(){ setPress(false); }}
+      onTouchStart={function(){ setPress(true); }} onTouchEnd={function(){ setPress(false); }}
+      style={{
+        height:h, background:CREAM, border:"2px solid " + BORDER, borderRadius:10,
+        cursor:"pointer", color:DARK, userSelect:"none",
+        display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3,
+        boxShadow: press ? "0 1px 0 rgba(0,0,0,0.1)" : "0 5px 0 rgba(0,0,0,0.22)",
+        transform: press ? "translateY(5px)" : "none",
+        transition:"transform 0.06s, box-shadow 0.06s",
+        padding:"4px 0",
+      }}
+    >
+      {renderNote(type, noteSize, DARK)}
+      <div style={{fontSize:labelSize,fontWeight:700}}>{meta.label}</div>
+      <div style={{fontSize:9,opacity:0.5}}>{meta.sound}</div>
+    </button>
+  );
+}
+
+// BankGrid: layout adapts to number of buttons per level
+function BankGrid(props) {
+  var types = props.types, onAdd = props.onAdd;
+  var n = types.length;
+
+  // Level 4 has 5 buttons: show as 2 rows (4 up top, rest spanning below)
+  if (n === 5) {
+    return (
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+          {types.slice(0,4).map(function(t){ return <BankBtn key={t} type={t} onAdd={onAdd} small/>; })}
+        </div>
+        <BankBtn type={types[4]} onAdd={onAdd}/>
+      </div>
+    );
+  }
+
+  var cols = n === 1 ? "1fr" : n === 2 ? "1fr 1fr" : "1fr 1fr 1fr";
+  return (
+    <div style={{display:"grid",gridTemplateColumns:cols,gap:8}}>
+      {types.map(function(t){ return <BankBtn key={t} type={t} onAdd={onAdd}/>; })}
+    </div>
+  );
+}
+
+function NavBtn(props) {
+  var label = props.label, onClick = props.onClick, disabled = props.disabled;
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      width:38, height:34,
+      background: disabled ? "transparent" : "#2a2a2a",
+      border: "1.5px solid " + (disabled ? "#1a1a1a" : "#444"),
+      borderRadius: 8,
+      cursor: disabled ? "default" : "pointer",
+      color: disabled ? "#2a2a2a" : CREAM,
+      fontSize: 22, fontWeight: 700,
+      display:"flex", alignItems:"center", justifyContent:"center",
+      lineHeight: 1,
+    }}>{label}</button>
+  );
+}
+
+function Slider(props) {
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:10,marginBottom:4}}>
+        <span style={{color:"#333"}}>{props.label}</span>
+        <span style={{color:props.color}}>{props.disp}</span>
+      </div>
+      <input type="range" min={props.min} max={props.max} step={props.step} value={props.val}
+        onChange={function(e){ props.onChange(Number(e.target.value)); }}
+        style={{width:"100%",accentColor:props.color}}/>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════
+// WELCOME SCREEN
+// ═══════════════════════════════════════════════
+function Welcome(props) {
+  var onSelect = props.onSelect;
+  var hS = useState(null); var hov = hS[0], setHov = hS[1];
+  var modes = [
+    {id:"practice", icon:"📖", title:"אזור תרגול", sub:"ראה את המקצב ותתאמן בלי לחץ", accent:BLUE},
+    {id:"game",     icon:"🥁", title:"אזור משחק",  sub:"האזן, זהה ואסוף 10 קלפי תיבה!", accent:GREEN},
+  ];
+
+  return (
+    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#1a160f 0%,#0d0a06 100%)",
+      display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+      fontFamily:"Rubik,sans-serif",direction:"rtl",padding:28}}>
+
+      <div style={{position:"fixed",inset:0,opacity:0.1,pointerEvents:"none",
+        backgroundImage:"linear-gradient(rgba(237,224,204,0.3) 1px,transparent 1px),linear-gradient(90deg,rgba(237,224,204,0.3) 1px,transparent 1px)",
+        backgroundSize:"40px 40px"}}/>
+
+      <div style={{position:"relative",zIndex:1,width:"100%",maxWidth:360,textAlign:"center"}}>
+        {/* Logo */}
+        <div style={{marginBottom:46}}>
+          <div style={{
+            width:100,height:100,borderRadius:"50%",margin:"0 auto 18px",
+            background:"radial-gradient(circle at 35% 35%," + GREEN + ",#7a9030)",
+            display:"flex",alignItems:"center",justifyContent:"center",
+            boxShadow:"0 8px 32px rgba(184,201,106,0.2)",position:"relative",
+          }}>
+            <div style={{width:58,height:46,borderRadius:"10px",
+              background:"linear-gradient(160deg,#6b3a1a,#3d1e0a)",
+              border:"3px solid #8a6040",display:"flex",alignItems:"center",justifyContent:"center",
+              boxShadow:"0 4px 12px rgba(0,0,0,0.5)"}}>
+              <div style={{width:18,height:14,borderRadius:"50%",background:"#aaa",border:"2px solid #888"}}/>
+            </div>
+            <span style={{position:"absolute",top:8,right:10,fontSize:16,color:"rgba(0,0,0,0.35)"}}>♩</span>
+            <span style={{position:"absolute",bottom:14,right:8,fontSize:13,color:"rgba(0,0,0,0.3)"}}>♪</span>
+          </div>
+          <div style={{fontSize:50,fontWeight:900,color:CREAM,lineHeight:0.9,letterSpacing:-1,marginBottom:12}}>
+            BEAT IT
+          </div>
+          <div style={{fontSize:17,color:CREAM,fontWeight:600,marginBottom:4}}>ביט איט</div>
+          <div style={{fontSize:10,color:"rgba(237,224,204,0.28)",letterSpacing:4}}>משחק מקצב • THE SECRET BEAT BOX</div>
+        </div>
+
+        {/* Modes */}
+        {modes.map(function(m) {
+          var isH = hov === m.id;
+          return (
+            <div key={m.id} onClick={function(){ onSelect(m.id); }}
+              onMouseEnter={function(){ setHov(m.id); }} onMouseLeave={function(){ setHov(null); }}
+              style={{display:"flex",alignItems:"center",gap:16,padding:"18px 20px",marginBottom:12,
+                borderRadius:14,cursor:"pointer",textAlign:"right",transition:"all 0.2s ease",
+                background: isH ? m.accent+"22" : "rgba(237,224,204,0.04)",
+                border:"1.5px solid " + (isH ? m.accent : "rgba(237,224,204,0.1)"),
+              }}>
+              <span style={{fontSize:32}}>{m.icon}</span>
+              <div>
+                <div style={{fontSize:18,fontWeight:700,color:CREAM,marginBottom:3}}>{m.title}</div>
+                <div style={{fontSize:11,color:"rgba(237,224,204,0.4)"}}>{m.sub}</div>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Legend */}
+        <div style={{marginTop:24,padding:"14px 12px",background:"rgba(237,224,204,0.04)",
+          borderRadius:12,border:"1px solid rgba(237,224,204,0.08)"}}>
+          <div style={{fontSize:9,color:"rgba(237,224,204,0.28)",marginBottom:10,letterSpacing:3}}>מקרא קלפי הפעמה</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+            {[{t:"quarter_down",l:"בּוּם ↓"},{t:"quarter_up",l:"טַאק ↑"},{t:"rest",l:"שתק"}].map(function(x){
+              return (
+                <div key={x.t} style={{background:CREAM,border:"1.5px solid " + BORDER,borderRadius:8,
+                  padding:"10px 4px",display:"flex",flexDirection:"column",alignItems:"center",gap:4,color:DARK}}>
+                  {renderNote(x.t, 26, DARK)}
+                  <span style={{fontSize:10,fontWeight:700}}>{x.l}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{marginTop:32,color:"rgba(237,224,204,0.1)",fontSize:9,letterSpacing:4}}>
+          BAREKET-STUDIO © 2026
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════
+// GAME / PRACTICE SCREEN
+// ═══════════════════════════════════════════════
+function GameScreen(props) {
+  var mode = props.mode, onBack = props.onBack;
+  var ip = mode === "practice";
+
+  var lvlS = useState(1);   var lvl = lvlS[0], setLvl = lvlS[1];
+  var patsS = useState([]); var pats = patsS[0], setPats = patsS[1];
+  var idxS = useState(0);   var idx = idxS[0], setIdx = idxS[1];
+  var plrS = useState([]); var player = plrS[0], setPlayer = plrS[1];
+  var aSlotS = useState(null); var aSlot = aSlotS[0], setASlot = aSlotS[1];
+  var phaseS = useState(null); var phase = phaseS[0], setPhase = phaseS[1];
+  var playS = useState(false); var playing = playS[0], setPlaying = playS[1];
+  var bpmS = useState(100); var bpm = bpmS[0], setBpm = bpmS[1];
+  var volS = useState(0.8); var vol = volS[0], setVol = volS[1];
+  var fbS = useState(null); var fb = fbS[0], setFb = fbS[1];
+  var scoreS = useState(0); var score = scoreS[0], setScore = scoreS[1];
+  var revS = useState(false); var reveal = revS[0], setReveal = revS[1];
+  var cBeatS = useState(null); var cBeat = cBeatS[0], setCBeat = cBeatS[1];
+
+  var pat = pats[idx] || [];
+  var filled = player.filter(function(x){ return !!x; }).length;
+  var barBg = LEVEL_COLORS[lvl - 1] || GREEN;
+  var bankTypes = LEVEL_BANKS[lvl - 1] || LEVEL_BANKS[0];
+
+  var freshPats = useCallback(function(l) {
+    var L = l !== undefined ? l : lvl;
+    var arr = [];
+    for (var i = 0; i < 20; i++) arr.push(genPattern(L));
+    setPats(arr); setIdx(0); setPlayer([]); setFb(null); setReveal(false);
+  }, [lvl]);
+
+  useEffect(function(){ freshPats(1); }, []);
+  useEffect(function(){ audio.setBpm(bpm); }, [bpm]);
+  useEffect(function(){ audio.setVol(vol); }, [vol]);
+
+  // Font load
+  useEffect(function() {
+    var l = document.createElement("link");
+    l.href = "https://fonts.googleapis.com/css2?family=Rubik:wght@400;600;700;900&display=swap";
+    l.rel = "stylesheet"; document.head.appendChild(l);
+  }, []);
+
+  var goNext = useCallback(function() {
+    var n = idx + 1;
+    if (n >= pats.length) { freshPats(lvl); return; }
+    setIdx(n); setPlayer([]); setFb(null); setReveal(false);
+  }, [idx, pats.length, freshPats, lvl]);
+
+  var goPrev = useCallback(function() {
+    if (idx === 0) return;
+    setIdx(idx - 1); setPlayer([]); setFb(null); setReveal(false);
+  }, [idx]);
+
+  var doPlay = useCallback(function() {
+    if (playing || !pat.length) return;
+    setPlaying(true); setCBeat(null); setFb(null);
+    audio.playPattern(pat,
+      function(i, p) { setASlot(i); setPhase(p); if (p === "count") setCBeat(i); else setCBeat(null); },
+      function() { setPlaying(false); setASlot(null); setPhase(null); setCBeat(null); }
+    );
+  }, [playing, pat]);
+
+  var addCard = useCallback(function(type) {
+    if (filled >= 4) return;
+    audio.playOnce(type);
+    setPlayer(function(p) { return p.concat([type]); });
+  }, [filled]);
+
+  var flipCard = useCallback(function(i) {
+    setPlayer(function(p) {
+      var n = p.slice(); if (n[i]) n[i] = FLIP[n[i]]; return n;
+    });
+  }, []);
+
+  var delCard = useCallback(function() {
+    setPlayer(function(p) { return p.slice(0, -1); }); setFb(null);
+  }, []);
+
+  var check = useCallback(function() {
+    if (filled !== 4) return;
+    var ok = JSON.stringify(player) === JSON.stringify(pat);
+    setFb(ok ? "ok" : "fail");
+    if (ok && !ip) {
+      var ns = score + 1; setScore(ns);
+      if (ns >= 10) setTimeout(function() {
+        setScore(0); var nl = Math.min(lvl + 1, 4); setLvl(nl); freshPats(nl);
+      }, 2400);
+    }
+  }, [filled, player, pat, ip, score, lvl, freshPats]);
+
+  var changeLvl = function(l) { setLvl(l); freshPats(l); };
+
+  return (
+    <div style={{background:"#080808",minHeight:"100vh",color:"white",
+      fontFamily:"Rubik,sans-serif",direction:"rtl",
+      maxWidth:440,margin:"0 auto",padding:"12px 12px 32px",
+      display:"flex",flexDirection:"column",gap:10}}>
+
+      {/* HEADER */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <button onClick={onBack} style={{background:"none",border:"1px solid rgba(237,224,204,0.1)",
+          color:"rgba(237,224,204,0.35)",padding:"7px 12px",borderRadius:9,cursor:"pointer",fontSize:13}}>
+          ← חזרה
+        </button>
+        <div style={{display:"flex",gap:4}}>
+          {[1,2,3,4].map(function(l){
+            var info = LEVEL_INFO[l-1];
+            return (
+              <button key={l} onClick={function(){ changeLvl(l); }} style={{
+                padding:"4px 8px",borderRadius:8,cursor:"pointer",fontSize:11,fontWeight:700,
+                border:"1.5px solid " + (lvl===l ? barBg : "rgba(237,224,204,0.1)"),
+                background: lvl===l ? barBg+"30" : "transparent",
+                color: lvl===l ? barBg : "rgba(237,224,204,0.25)",
+                lineHeight:1.3,
+              }}>
+                <div>{l}</div>
+              </button>
+            );
+          })}
+        </div>
+        {!ip
+          ? <div style={{background:"rgba(237,224,204,0.05)",border:"1px solid rgba(237,224,204,0.12)",
+              padding:"5px 10px",borderRadius:9,fontSize:13,fontWeight:700,color:CREAM}}>
+              🏆 {score}/10
+            </div>
+          : <div style={{width:56}}/>
+        }
+      </div>
+      {/* Level description */}
+      <div style={{textAlign:"center",fontSize:10,color:barBg,fontWeight:600,marginTop:-6}}>
+        {LEVEL_INFO[lvl-1].sub}
+      </div>
+
+      {/* BAR DISPLAY */}
+      <div style={{background:"#111",border:"1px solid #1a1a1a",borderRadius:16,padding:"14px 14px 10px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <span style={{fontSize:9,color:"#2a2a2a",letterSpacing:3}}>BAR 4/4  •  תיבה</span>
+            {ip && <span style={{fontSize:9,color:"#2a2a2a"}}>{idx+1}/{pats.length}</span>}
+          </div>
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            {ip && <NavBtn label="‹" onClick={goPrev} disabled={idx===0}/>}
+            {ip && <NavBtn label="›" onClick={goNext}/>}
+            {!ip && (
+              <button onClick={function(){ setReveal(function(r){ return !r; }); }}
+                style={{background:"none",border:"1px solid #222",color:"#555",
+                  padding:"3px 10px",borderRadius:6,cursor:"pointer",fontSize:10}}>
+                {reveal ? "🙈 הסתר" : "👁 גלה"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {cBeat !== null && (
+          <div style={{display:"flex",justifyContent:"center",gap:10,marginBottom:10,direction:"ltr"}}>
+            {[0,1,2,3].map(function(i){
+              return (
+                <div key={i} style={{width:30,height:30,borderRadius:"50%",
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  background:cBeat===i ? barBg : "#1a1a1a",
+                  color:cBeat===i ? DARK : "#333",
+                  fontWeight:700,fontSize:13,transition:"all 0.1s"}}>
+                  {i+1}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}} dir="ltr">
+          {pat.length===4 && (ip||reveal)
+            ? pat.map(function(t,i){ return <BarCard key={i} type={t} active={aSlot===i&&phase==="pat"} lvl={lvl}/>; })
+            : [0,1,2,3].map(function(i){ return <HiddenSlot key={i} active={aSlot===i&&phase==="pat"} lvl={lvl}/>; })
+          }
+        </div>
+
+        <div style={{display:"flex",justifyContent:"space-around",marginTop:8}} dir="ltr">
+          {[0,1,2,3].map(function(i){
+            return <span key={i} style={{fontSize:10,fontWeight:700,
+              color:aSlot===i?barBg:"#222",transition:"color 0.08s"}}>{i+1}</span>;
+          })}
+        </div>
+      </div>
+
+      {/* PLAY CONTROLS */}
+      <div style={{background:"#111",border:"1px solid #1a1a1a",borderRadius:14,padding:12}}>
+        <button onClick={doPlay} disabled={playing} style={{
+          width:"100%",padding:"13px 0",borderRadius:10,border:"none",
+          background:playing?"#1c1a40":"#4F46E5",
+          color:playing?"#818CF8":"white",
+          fontSize:16,fontWeight:700,cursor:playing?"not-allowed":"pointer",
+          marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+          transition:"background 0.2s"}}>
+          {playing ? (phase==="count" ? "🥁  ספירה..." : "🎵  מנגן מקצב...") : "🔊  נגן מקצב"}
+        </button>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <Slider label="BPM" val={bpm} min={60} max={160} step={1} color={barBg} onChange={setBpm} disp={bpm}/>
+          <Slider label="VOL" val={vol} min={0} max={1} step={0.05} color="#34D399" onChange={setVol} disp={Math.round(vol*100)+"%"}/>
+        </div>
+      </div>
+
+      {/* PLAYER SLOTS */}
+      <div>
+        <div style={{background:"rgba(237,224,204,0.07)",border:"1px solid rgba(237,224,204,0.12)",
+          borderRadius:10,padding:"8px 12px",marginBottom:8,textAlign:"center"}}>
+          <div style={{fontSize:13,fontWeight:700,color:CREAM,marginBottom:2}}>
+            🎯 צרו תיבה זהה לנתונה למעלה
+          </div>
+          <div style={{fontSize:10,color:"rgba(237,224,204,0.4)"}}>
+            בחרו קלפים מלמטה • לחצו 🔄 להפוך בין בום ↓ לטאק ↑
+          </div>
+        </div>
+
+        {/* Cards row */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,direction:"ltr"}}>
+          {[0,1,2,3].map(function(i){
+            return player[i]
+              ? <PhysCard key={i} type={player[i]} compact/>
+              : <EmptySlot key={i} n={i+1}/>;
+          })}
+        </div>
+
+        {/* Flip buttons row — visible only when relevant cards exist */}
+        {player.length > 0 && (
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,direction:"ltr",marginTop:4}}>
+            {[0,1,2,3].map(function(i){
+              var canFlip = player[i] && player[i] !== "rest";
+              return (
+                <div key={i}>
+                  {canFlip ? (
+                    <button
+                      onClick={function(){ flipCard(i); }}
+                      style={{
+                        width:"100%", padding:"6px 0",
+                        background: "#1e1e1e",
+                        border:"1.5px solid #3a3a3a",
+                        borderRadius:8, cursor:"pointer",
+                        color:CREAM, fontSize:13, fontWeight:700,
+                        display:"flex", alignItems:"center", justifyContent:"center", gap:4,
+                      }}
+                    >
+                      <span>🔄</span>
+                      <span style={{fontSize:11}}>{player[i].indexOf("up") !== -1 ? "↑ טאק" : "↓ בום"}</span>
+                    </button>
+                  ) : (
+                    <div style={{height:32}}/>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* CARD BANK — dynamic per level */}
+      <BankGrid types={bankTypes} onAdd={addCard}/>
+
+      {/* ACTION / FEEDBACK */}
+      {fb ? (
+        <div>
+          <div style={{marginBottom:8}}>
+            <div style={{fontSize:10,color:"#333",textAlign:"center",marginBottom:6}}>
+              {fb==="ok" ? "המקצב הנכון ✓" : "המקצב הנכון היה:"}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}} dir="ltr">
+              {pat.map(function(t,i){ return <BarCard key={i} type={t} lvl={lvl}/>; })}
+            </div>
+          </div>
+          <div style={{background:fb==="ok"?"#052e16":"#1f0a0a",
+            border:"1.5px solid " + (fb==="ok"?"#16a34a":"#991b1b"),
+            borderRadius:14,padding:"18px 16px",textAlign:"center"}}>
+            <div style={{fontSize:36,marginBottom:6}}>{fb==="ok" ? "🏆" : "❌"}</div>
+            <div style={{fontSize:20,fontWeight:700,marginBottom:3}}>{fb==="ok" ? "כל הכבוד!" : "לא מדויק..."}</div>
+            {fb==="ok" && !ip && <div style={{fontSize:12,color:"#4ade80",marginBottom:4}}>+1 קלף תיבה • {score}/10</div>}
+            <div style={{display:"grid",gridTemplateColumns:fb==="ok"?"1fr":"1fr 1fr",gap:8,marginTop:12}}>
+              {fb!=="ok" && (
+                <button onClick={function(){ setPlayer([]); setFb(null); }}
+                  style={{padding:"12px 0",background:"#4F46E5",color:"white",border:"none",
+                    borderRadius:10,fontWeight:700,cursor:"pointer",fontSize:15}}>נסה שוב</button>
+              )}
+              <button onClick={function(){ if(fb!=="ok") setReveal(true); goNext(); }}
+                style={{padding:"14px 0",
+                  background:fb==="ok"?GREEN:"#141414",
+                  color:fb==="ok"?DARK:"#555",
+                  border:fb==="ok"?"none":"1px solid #222",
+                  borderRadius:10,fontWeight:700,cursor:"pointer",fontSize:fb==="ok"?16:13}}>
+                {fb==="ok" ? "▶ מקצב הבא" : "דלג ▶"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div style={{display:"grid",gridTemplateColumns:"1fr 3fr",gap:8}}>
+          <button onClick={delCard} style={{padding:"15px 0",background:"#150808",color:"#f87171",
+            border:"1px solid #2a1010",borderRadius:10,cursor:"pointer",fontSize:20}}>⌫</button>
+          <button onClick={check} disabled={filled!==4} style={{
+            padding:"15px 0",fontSize:17,fontWeight:700,borderRadius:10,border:"none",
+            background:filled===4?"#16a34a":"#111",
+            color:filled===4?"white":"#2a2a2a",
+            cursor:filled===4?"pointer":"not-allowed",transition:"all 0.2s"}}>
+            {filled===4 ? "✓  בדוק!" : filled+" / 4 קלפים"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════
+// ROOT
+// ═══════════════════════════════════════════════
+function App() {
+  var scS = useState("welcome"); var sc = scS[0], setSc = scS[1];
+  var modeS = useState(null); var mode = modeS[0], setMode = modeS[1];
+
+  function go(m) { setMode(m); setSc("play"); }
+
+  if (sc === "welcome") return <Welcome onSelect={go}/>;
+  return <GameScreen mode={mode} onBack={function(){ setSc("welcome"); }}/>;
+}
+
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App/>);
+  </script>
+</body>
+</html>
