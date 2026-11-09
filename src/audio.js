@@ -105,6 +105,18 @@ export function playBar(pattern, onTick, onDone) {
   timers.push(setTimeout(() => { timers = []; onDone?.(); }, (8 * beat) * 1000 + 300));
 }
 
+// Plays a free sequence of cards, one card per beat (used by the card lab).
+// onTick(index) fires as each card sounds. onDone() at the end.
+export function playSequence(types, onTick, onDone) {
+  stop();
+  const c = getCtx();
+  const beat = 60 / bpm;
+  const start = c.currentTime + 0.1;
+  types.forEach((t, i) => hitSlot(t, start + i * beat));
+  types.forEach((_, i) => timers.push(setTimeout(() => onTick?.(i), i * beat * 1000)));
+  timers.push(setTimeout(() => { timers = []; onDone?.(); }, types.length * beat * 1000 + 250));
+}
+
 export function stop() {
   timers.forEach(clearTimeout);
   timers = [];

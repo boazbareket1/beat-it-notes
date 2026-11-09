@@ -35,7 +35,7 @@ for (const page of PAGES) {
   <meta property="og:description" content="זהו את המקצב, סדרו את הקלפים, וצברו קלפי תיבה" />
   <title>${page.title}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;600;700;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Secular+One&family=Alef:wght@400;700&display=swap" rel="stylesheet" />
   <style>${css}</style>
 </head>
 <body>
