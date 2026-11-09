@@ -33,7 +33,7 @@ function beamedGroup(xs, beams) {
 function notes(kind) {
   switch (kind) {
     case "quarter":
-      return head(100, BASE) + stem(100, 70, BASE);
+      return head(100, BASE) + stem(100, TOP, BASE); // same stem length as the beamed notes
     case "eighths":
       return beamedGroup([72, 128], [0]);
     case "sixteenths":
