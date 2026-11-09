@@ -1,9 +1,9 @@
-/* BEAT IT — the game table. A cobalt playing mat (the blue of the physical kit),
+/* BEAT IT — the game table. A deep petrol playing mat,
    cream card stock, navy ink, lime and red from the table edge. RTL Hebrew UI. */
 
 :root {
-  --mat: #1f55c8;
-  --mat-deep: #163f9e;
+  --mat: #0E6B6E;
+  --mat-deep: #0A3F46;
   --edge: #e4462c;
   --lime: #c7ef5b;
   --sky: #9cc4ff;
@@ -160,14 +160,14 @@ input[type="range"] { accent-color: var(--mat); }
   transition: transform 0.12s, border-color 0.12s, box-shadow 0.12s;
 }
 .target-slot.is-active {
-  border-color: var(--mat); box-shadow: 0 0 0 4px rgba(31, 85, 200, 0.22); transform: translateY(-3px);
+  border-color: var(--mat); box-shadow: 0 0 0 4px rgba(14, 107, 110, 0.25); transform: translateY(-3px);
 }
 .target-img { height: 76px; max-width: 100%; width: auto; object-fit: contain; display: block; }
 .target-label { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
 .hidden-slot {
   height: 128px; border-radius: 16px; display: flex; align-items: center; justify-content: center;
   font-family: var(--display); font-size: 24px; color: rgba(255, 255, 255, 0.85);
-  background: repeating-linear-gradient(135deg, var(--mat) 0 10px, #2a63d4 10px 20px);
+  background: repeating-linear-gradient(135deg, var(--mat) 0 10px, #14858A 10px 20px);
   border: 2px solid rgba(255, 255, 255, 0.25); transition: transform 0.12s, background 0.12s;
 }
 .hidden-slot.is-active { background: var(--lime); color: var(--ink); transform: translateY(-3px); border-color: var(--lime); }
