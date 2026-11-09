@@ -18,7 +18,7 @@ for (const page of PAGES) {
     write: false,
     outdir: "dist",
     jsx: "automatic",
-    loader: { ".png": "dataurl" },
+    loader: { ".png": "dataurl", ".mp3": "dataurl" },
     define: { "process.env.NODE_ENV": '"production"' },
   });
 

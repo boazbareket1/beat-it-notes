@@ -1,13 +1,29 @@
 // Web Audio engine: "בום" (bass drum on the table), "טאק" (clap), click, rest.
 
+import kickUrl from "../assets/samples/kick.mp3";
+import snareUrl from "../assets/samples/snare.mp3";
+
 let ctx = null;
 let noiseBuf = null;
+const bufs = { kick: null, snare: null }; // decoded recorded samples (synth is the fallback)
 let bpm = 100;
 let vol = 0.8;
 let timers = [];
 
+function loadBuf(url, key) {
+  fetch(url)
+    .then((r) => r.arrayBuffer())
+    .then((ab) => ctx.decodeAudioData(ab))
+    .then((b) => { bufs[key] = b; })
+    .catch(() => {});
+}
+
 function getCtx() {
-  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    loadBuf(kickUrl, "kick");
+    loadBuf(snareUrl, "snare");
+  }
   if (ctx.state === "suspended") ctx.resume();
   return ctx;
 }
@@ -22,7 +38,19 @@ function getNoise() {
   return noiseBuf;
 }
 
+function playBuf(buf, t, gain) {
+  const c = getCtx();
+  const src = c.createBufferSource();
+  const g = c.createGain();
+  src.buffer = buf;
+  g.gain.value = gain;
+  src.connect(g);
+  g.connect(c.destination);
+  src.start(t);
+}
+
 function boom(t) {
+  if (bufs.kick) return playBuf(bufs.kick, t, vol);
   const c = getCtx();
   const o = c.createOscillator();
   const g = c.createGain();
@@ -37,6 +65,7 @@ function boom(t) {
 }
 
 function tak(t) {
+  if (bufs.snare) return playBuf(bufs.snare, t, vol);
   const c = getCtx();
   const src = c.createBufferSource();
   src.buffer = getNoise();
