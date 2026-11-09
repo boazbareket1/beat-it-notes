@@ -27,7 +27,7 @@ function beamedGroup(xs, beams) {
   return s;
 }
 
-const REST_PATH =
+// (kept for reference) const REST_PATH =
   "M68,16 C80,30 62,52 48,60 C36,66 30,78 38,90 C46,100 44,116 28,130 C20,138 8,146 6,150 C14,138 20,126 16,114 C10,100 22,88 38,80 C54,72 62,54 52,40 Z";
 
 function notes(kind) {
@@ -39,12 +39,12 @@ function notes(kind) {
     case "sixteenths":
       return beamedGroup([56, 88, 120, 152], [0, 1]);
     case "triplet":
-      return (
-        beamedGroup([62, 100, 138], [0]) +
-        `<text x="100" y="${TOP - 18}" text-anchor="middle" font-family="serif" font-style="italic" font-size="30" fill="#000">3</text>`
-      );
+      return beamedGroup([62, 100, 138], [0]);
     case "rest":
-      return `<g transform="translate(78 70) scale(0.78)"><polygon points="18,8 68,8 68,24 18,46" fill="#000"/><path d="${REST_PATH}" fill="#000"/><ellipse cx="14" cy="152" rx="16" ry="11" transform="rotate(10 14 152)" fill="#000"/></g>`;
+      return (
+        `<polyline points="80,96 120,116 88,138 120,160 88,180" fill="none" stroke="#000" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>` +
+        `<ellipse cx="80" cy="190" rx="13" ry="10" transform="rotate(-20 80 190)" fill="#000"/>`
+      );
     default:
       return "";
   }
@@ -61,6 +61,10 @@ export function cardSvg(kind, dir = "down") {
   return (
     `<svg viewBox="0 0 200 280" xmlns="http://www.w3.org/2000/svg" class="card-svg">` +
     `<rect x="6" y="6" width="188" height="268" rx="18" fill="#FFFFFF" stroke="${FRAME}" stroke-width="5"/>` +
-    `<g${turned}><g transform="translate(100 140) scale(${k}) translate(-100 -140)">${notes(kind)}</g></g></svg>`
+    `<g${turned}><g transform="translate(100 140) scale(${k}) translate(-100 -140)">${notes(kind)}</g></g>` +
+    (kind === "triplet"
+      ? `<text x="100" y="54" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="30" fill="#000">3</text>`
+      : "") +
+    `</svg>`
   );
 }
