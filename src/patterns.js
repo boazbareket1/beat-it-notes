@@ -21,9 +21,9 @@ export const FLIP = {
 };
 
 export const LEVELS = [
-  { name: "רמה 1", sub: "רבע בס בלבד", types: ["quarter_down"], color: "#B8C96A" },
-  { name: "רמה 2", sub: "+ שמיניות", types: ["quarter_down", "eighths_down"], color: "#7BBFB0" },
-  { name: "רמה 3", sub: "+ סנר ושתק", types: ["quarter_down", "quarter_up", "rest"], color: "#9BAED0" },
+  { name: "רמה 1", sub: "רבע בס + שתק", types: ["quarter_down", "rest"], color: "#B8C96A" },
+  { name: "רמה 2", sub: "+ שמיניות", types: ["quarter_down", "rest", "eighths_down"], color: "#7BBFB0" },
+  { name: "רמה 3", sub: "+ סנר", types: ["quarter_down", "quarter_up", "rest"], color: "#9BAED0" },
   {
     name: "רמה 4",
     sub: "הכל",
@@ -34,9 +34,14 @@ export const LEVELS = [
 
 export const BAR_LENGTH = 4;
 
+// Random bar from the level's pool. A bar of only rests is rejected (nothing to clap).
 export function randomBar(level) {
   const pool = LEVELS[level - 1].types;
-  return Array.from({ length: BAR_LENGTH }, () => pool[Math.floor(Math.random() * pool.length)]);
+  let bar;
+  do {
+    bar = Array.from({ length: BAR_LENGTH }, () => pool[Math.floor(Math.random() * pool.length)]);
+  } while (bar.every((t) => t === "rest"));
+  return bar;
 }
 
 export function sameBar(a, b) {
