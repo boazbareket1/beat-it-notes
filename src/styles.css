@@ -232,3 +232,11 @@ a { color: inherit; text-decoration: none; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* full game (rhythm-16): SVG card art */
+.card-art { display: block; height: 100%; }
+.card-art svg { height: 100%; width: auto; display: block; }
+.phys .card-art { height: 96px; }
+.target-slot .card-art { height: 92px; }
+.bank-btn .card-art { height: 58px; }
+.target-slot.is-active .card-art { filter: drop-shadow(0 0 3px var(--gold)); }

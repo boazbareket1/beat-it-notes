@@ -1,6 +1,24 @@
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+import { cardSvg } from "./notation.js";
 import { playBar, playOnce, setBpm, setVol, stop } from "./audio.js";
-import { BAR_LENGTH, CARD, FLIP, LEVELS, describeBar, randomBar, sameBar } from "./patterns.js";
+import { BAR_LENGTH, CARD, FLIP, FULL_LEVELS, LEVELS, describeBar, randomBar, sameBar } from "./patterns.js";
+
+const VariantCtx = createContext("classic");
+
+// Card art: PNG from the physical classic kit, or SVG notation for the full game.
+function CardArt({ type, className }) {
+  const variant = useContext(VariantCtx);
+  const [kind, dir] = type === "rest" ? ["rest", "rest"] : type.split("_");
+  if (variant === "full") {
+    return (
+      <span
+        className={`card-art ${className ?? ""}`}
+        dangerouslySetInnerHTML={{ __html: cardSvg(kind, dir) }}
+      />
+    );
+  }
+  return <img className={className} src={CARD[type].img} alt={type} draggable={false} />;
+}
 import { loadHistory, recommend, saveSession } from "./store.js";
 
 // Links to the physical game and to ordering (WhatsApp, prefilled).
@@ -13,11 +31,11 @@ const DECK_SIZE = 20;
 const GYM_SESSION = 10;
 const WIN_BARS = 10;
 
-const newDeck = (level) => Array.from({ length: DECK_SIZE }, () => randomBar(level));
+const newDeck = (level, levels) => Array.from({ length: DECK_SIZE }, () => randomBar(level, levels));
 
 // ───────────────────────── Welcome ─────────────────────────
 
-function Welcome({ onSelect, history }) {
+function Welcome({ onSelect, history, variant }) {
   const last = history[history.length - 1];
   const modes = [
     { id: "practice", icon: "📖", title: "תרגול", sub: "רואים את המקצב ומתאמנים בקצב שלכם" },
@@ -32,8 +50,8 @@ function Welcome({ onSelect, history }) {
   return (
     <div className="welcome">
       <header className="logo">
-        <div className="logo-en">BEAT IT</div>
-        <div className="logo-sub">NOTES · ביט איט</div>
+        <div className="logo-en">BEAT IT{variant === "full" ? " 16" : ""}</div>
+        <div className="logo-sub">{variant === "full" ? "שש-עשריות · שלשות · כל התבניות" : "NOTES · ביט איט"}</div>
         <div className="logo-tag">משחק מקצב · הקלפים הפיזיים גם בבית</div>
       </header>
 
@@ -57,6 +75,9 @@ function Welcome({ onSelect, history }) {
       )}
 
       <div className="bridge">
+        <a className="bridge-btn" href={variant === "full" ? "index.html" : "beat-it-16.html"}>
+          {variant === "full" ? "🎵 למשחק הבסיסי" : "🎼 למשחק עם שש-עשריות ושלשות"}
+        </a>
         <a className="bridge-btn" href={INSTRUCTIONS_URL}>
           📘 הוראות המשחק הפיזי
         </a>
@@ -75,18 +96,14 @@ function Welcome({ onSelect, history }) {
 // A physical-looking card. "up" cards are the same card turned 180°.
 function PhysCard({ type, compact, onFlip, onRemove }) {
   const c = CARD[type];
+  const isFull = useContext(VariantCtx) === "full";
   const dirText = c.dir === "up" ? "↑ טאק • כף" : c.dir === "down" ? "↓ בום • שולחן" : "שתק";
   return (
     <div className={`phys ${compact ? "phys-compact" : ""}`} style={{ borderColor: c.color }}>
       <div className="phys-strip" style={{ background: c.color }}>
         {dirText}
       </div>
-      <img
-        className={`phys-img ${c.dir === "up" ? "is-up" : ""}`}
-        src={c.img}
-        alt={type}
-        draggable={false}
-      />
+      <CardArt type={type} className={`phys-img ${c.dir === "up" && !isFull ? "is-up" : ""}`} />
       {onFlip && type !== "rest" && (
         <button className="flip-btn" onClick={onFlip} aria-label="הפוך את הקלף">
           ↕ הפוך
@@ -109,20 +126,23 @@ function HiddenSlot({ n, active }) {
 // Visible target slot.
 function TargetSlot({ type, active }) {
   const c = CARD[type];
+  const isFull = useContext(VariantCtx) === "full";
   return (
     <div className={`target-slot ${active ? "is-active" : ""}`}>
-      <img className={`target-img ${c.dir === "up" ? "is-up" : ""}`} src={c.img} alt={type} draggable={false} />
+      <CardArt type={type} className={`target-img ${c.dir === "up" && !isFull ? "is-up" : ""}`} />
       <span className="target-label">{c.dir === "rest" ? "שתק" : c.dir === "up" ? "↑ טאק" : "↓ בום"}</span>
     </div>
   );
 }
 
 function Bank({ types, onAdd }) {
+  const isFull = useContext(VariantCtx) === "full";
+  const cols = types.length <= 4 ? types.length : types.length <= 6 ? 3 : 4;
   return (
     <div
       className="bank"
       style={{
-        gridTemplateColumns: `repeat(${types.length === 5 ? 4 : types.length}, minmax(0, 1fr))`,
+        gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
         maxWidth: types.length < 4 ? types.length * 120 : undefined,
         margin: "0 auto",
       }}
@@ -130,7 +150,7 @@ function Bank({ types, onAdd }) {
       {types.map((t) => (
         <button key={t} className="bank-btn" onClick={() => onAdd(t)} style={{ borderColor: CARD[t].color }}>
           <span className="bank-strip" style={{ background: CARD[t].color }} />
-          <img className={`bank-img ${CARD[t].dir === "up" ? "is-up" : ""}`} src={CARD[t].img} alt={t} draggable={false} />
+          <CardArt type={t} className={`bank-img ${CARD[t].dir === "up" && !isFull ? "is-up" : ""}`} />
           <span className="bank-sound">{CARD[t].sound}</span>
         </button>
       ))}
@@ -141,10 +161,12 @@ function Bank({ types, onAdd }) {
 // ───────────────────────── Play (practice / game / gym) ─────────────────────────
 
 function Play({ mode, initialLevel, initialBpm, onExit }) {
+  const variant = useContext(VariantCtx);
+  const LV = variant === "full" ? FULL_LEVELS : LEVELS;
   const [level, setLevel] = useState(initialLevel);
   const [bpm, setBpmState] = useState(initialBpm);
   const [volume, setVolume] = useState(0.8);
-  const [deck, setDeck] = useState(() => newDeck(initialLevel));
+  const [deck, setDeck] = useState(() => newDeck(initialLevel, LV));
   const [idx, setIdx] = useState(0);
   const [answer, setAnswer] = useState([]);
   const [result, setResult] = useState(null); // null | "ok" | "fail"
@@ -157,7 +179,7 @@ function Play({ mode, initialLevel, initialBpm, onExit }) {
   const [history, setHistory] = useState(() => loadHistory());
 
   const bar = deck[idx];
-  const types = LEVELS[level - 1].types;
+  const types = LV[level - 1].types;
 
   useEffect(() => setBpm(bpm), [bpm]);
   useEffect(() => setVol(volume), [volume]);
@@ -171,14 +193,14 @@ function Play({ mode, initialLevel, initialBpm, onExit }) {
 
   function changeLevel(l) {
     setLevel(l);
-    setDeck(newDeck(l));
+    setDeck(newDeck(l, LV));
     setIdx(0);
     resetRound();
   }
 
   function advance() {
     if (idx + 1 >= deck.length) {
-      setDeck(newDeck(level));
+      setDeck(newDeck(level, LV));
       setIdx(0);
     } else {
       setIdx(idx + 1);
@@ -319,7 +341,7 @@ function Play({ mode, initialLevel, initialBpm, onExit }) {
       />
 
       <div className="level-row">
-        {LEVELS.map((l, i) => (
+        {LV.map((l, i) => (
           <button
             key={l.name}
             className={`level-pill ${level === i + 1 ? "is-on" : ""}`}
@@ -334,7 +356,7 @@ function Play({ mode, initialLevel, initialBpm, onExit }) {
             {i + 1}
           </button>
         ))}
-        <span className="level-sub">{LEVELS[level - 1].sub}</span>
+        <span className="level-sub">{LV[level - 1].sub}</span>
       </div>
 
       <div className="panel">
@@ -390,7 +412,7 @@ function Play({ mode, initialLevel, initialBpm, onExit }) {
           <div className="sliders">
             <label className="slider">
               <span>BPM</span>
-              <b style={{ color: LEVELS[level - 1].color }}>{bpm}</b>
+              <b style={{ color: LV[level - 1].color }}>{bpm}</b>
               <input type="range" min="60" max="160" step="1" value={bpm} onChange={(e) => setBpmState(Number(e.target.value))} />
             </label>
             <label className="slider">
@@ -511,29 +533,30 @@ function Tip() {
 
 // ───────────────────────── App shell ─────────────────────────
 
-export default function App() {
+export default function App({ variant = "classic" }) {
   const [screen, setScreen] = useState({ name: "welcome" });
   const [history, setHistory] = useState(() => loadHistory());
 
-  if (screen.name === "welcome") {
-    return (
-      <Welcome
-        history={history}
-        onSelect={(id) => {
-          setHistory(loadHistory());
-          setScreen({ name: "play", mode: id });
-        }}
-      />
-    );
-  }
-
   return (
-    <Play
-      key={screen.mode}
-      mode={screen.mode}
-      initialLevel={1}
-      initialBpm={screen.mode === "gym" ? 90 : 100}
-      onExit={() => setScreen({ name: "welcome" })}
-    />
+    <VariantCtx.Provider value={variant}>
+      {screen.name === "welcome" ? (
+        <Welcome
+          variant={variant}
+          history={history}
+          onSelect={(id) => {
+            setHistory(loadHistory());
+            setScreen({ name: "play", mode: id });
+          }}
+        />
+      ) : (
+        <Play
+          key={screen.mode}
+          mode={screen.mode}
+          initialLevel={1}
+          initialBpm={screen.mode === "gym" ? 90 : 100}
+          onExit={() => setScreen({ name: "welcome" })}
+        />
+      )}
+    </VariantCtx.Provider>
   );
 }

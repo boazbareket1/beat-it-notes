@@ -66,13 +66,17 @@ function click(t, accent) {
   o.stop(t + 0.05);
 }
 
-// Plays the sound of one bar-slot. Eighths = two hits in the same beat.
+// Hits per beat for each card kind: quarter 1, eighths 2, triplet 3, sixteenths 4.
+const HITS = { quarter: 1, eighths: 2, triplet: 3, sixteenths: 4 };
+
+// Plays the sound of one bar-slot, spread evenly across its beat.
 function hitSlot(type, t) {
-  if (type === "rest") return;
-  const half = 60 / bpm / 2;
-  const hit = type.includes("down") ? boom : tak;
-  hit(t);
-  if (type.includes("eighths")) hit(t + half);
+  const [kind, dir] = type.split("_");
+  const n = HITS[kind];
+  if (!n || dir === undefined) return;
+  const beat = 60 / bpm;
+  const hit = dir === "down" ? boom : tak;
+  for (let i = 0; i < n; i++) hit(t + (i * beat) / n);
 }
 
 export function playOnce(type) {
