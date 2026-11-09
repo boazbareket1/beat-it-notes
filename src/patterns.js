@@ -36,7 +36,7 @@ export const FLIP = {
 // Full game: every rhythm pattern, introduced step by step.
 export const FULL_LEVELS = [
   { name: "רמה 1", sub: "רבע בס + שתק", types: ["quarter_down", "rest"], color: "#B8C96A" },
-  { name: "רמה 2", sub: "+ שמיניות וסנר", types: ["quarter_down", "rest", "eighths_down", "quarter_up"], color: "#7BBFB0" },
+  { name: "רמה 2", sub: "שמיניות + שילוב בס וסנר", types: ["quarter_down", "rest", "eighths_down", "quarter_up"], color: "#7BBFB0" },
   { name: "רמה 3", sub: "+ שש-עשריות", types: ["quarter_down", "rest", "eighths_down", "quarter_up", "sixteenths_down", "eighths_up"], color: "#9BAED0" },
   {
     name: "רמה 4",
@@ -49,7 +49,7 @@ export const FULL_LEVELS = [
 export const LEVELS = [
   { name: "רמה 1", sub: "רבע בס + שתק", types: ["quarter_down", "rest"], color: "#B8C96A" },
   { name: "רמה 2", sub: "+ שמיניות", types: ["quarter_down", "rest", "eighths_down"], color: "#7BBFB0" },
-  { name: "רמה 3", sub: "+ סנר", types: ["quarter_down", "quarter_up", "rest"], color: "#9BAED0" },
+  { name: "רמה 3", sub: "שילוב בס וסנר", types: ["quarter_down", "quarter_up", "rest"], color: "#9BAED0" },
   {
     name: "רמה 4",
     sub: "הכל",
