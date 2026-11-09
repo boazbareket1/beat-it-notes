@@ -141,13 +141,14 @@ input[type="range"] { accent-color: var(--mat); }
 }
 
 .level-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.level-row .level-sub { margin-inline-start: 6px; }
 .level-pill {
   width: 40px; height: 36px; border-radius: 12px; border: none; cursor: pointer; font-weight: 700; font-size: 14px;
   background: rgba(255, 255, 255, 0.14); color: #fff;
 }
 .level-pill.is-on { background: var(--c); color: var(--ink); }
 .level-pill:disabled { opacity: 0.45; }
-.level-sub { margin-right: auto; font-size: 14px; font-weight: 700; color: var(--white-soft); }
+.level-sub { font-size: 14px; font-weight: 700; color: var(--white-soft); }
 
 .play-grid { display: grid; gap: 14px; }
 
